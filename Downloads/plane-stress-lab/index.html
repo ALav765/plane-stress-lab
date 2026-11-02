@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plane Stress Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+:root{--bg:#edf0f3;--cd:#fff;--tx:#101827;--mu:#5b6577;--ln:#cbd2dc;--ac:#0b5fff;--dg:#c2321f;--sf:#f6f8fa;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e131b;--cd:#161d28;--tx:#e8ecf2;--mu:#93a0b4;--ln:#2a3547;--ac:#6aa3ff;--dg:#ff7a66;--sf:#1b2431;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e131b;--cd:#161d28;--tx:#e8ecf2;--mu:#93a0b4;--ln:#2a3547;--ac:#6aa3ff;--dg:#ff7a66;--sf:#1b2431;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:880px;margin:0 auto;padding:28px 18px 56px}
+h1{font-size:30px;line-height:1.2;font-weight:500;margin:0 0 8px;letter-spacing:-.01em}
+h2{font-size:20px;font-weight:500;margin:0 0 6px}
+p{margin:0 0 12px;max-width:68ch}
+.mu{color:var(--mu);font-size:14px}
+section{border-top:1px solid var(--ln);padding:28px 0 8px;margin-top:28px}
+.card{background:var(--cd);border:1px solid var(--ln);border-radius:10px;padding:14px}
+canvas{width:100%;height:auto;display:block;border-radius:6px;background:var(--sf)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:14px 0}
+.m{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.m div{background:var(--sf);border-radius:8px;padding:10px 12px}
+.m b{display:block;font-size:24px;font-weight:500;font-variant-numeric:tabular-nums}
+.m span{font-size:13px;color:var(--mu)}
+label{display:flex;justify-content:space-between;font-size:14px;color:var(--mu);margin-top:6px}
+input[type=range]{width:100%;accent-color:var(--ac)}
+button{font:inherit;font-size:14px;background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+:root[data-theme="dark"] button{color:#0e131b}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--ln)}
+th{font-weight:500;color:var(--mu)}
+th:first-child,td:first-child{text-align:left}
+.leg{height:10px;border-radius:5px;margin-top:8px}
+.sc{overflow-x:auto}
+ul{padding-left:20px;margin:0 0 12px;max-width:68ch}
+li{margin-bottom:4px}
+.tb{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:12px}.tb label{display:block;margin:0}select{font:inherit;font-size:14px;display:block;margin-top:2px;background:var(--sf);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:7px 10px}button+button{margin-left:0}.tb button{background:var(--sf);color:var(--tx);border:1px solid var(--ln)}#go{margin-bottom:10px}</style></head><body><main>
+<h1>Plane Stress Lab</h1>
+<p>A finite element analyser for 2D solid mechanics, running entirely in your browser. Pick a problem, a material and a load. See the stress field, the deformed shape and the safety factor, then check the solver against exact solutions.</p>
+<p class="mu">Solver written from scratch: 4-node quadrilateral elements, plane stress or plane strain, linear elastic.</p>
+
+<section>
+<h2>Analyser</h2>
+<div class="card">
+<div class="tb">
+<label>Problem<select id="tpl"></select></label>
+<label>Material<select id="mat"></select></label>
+<label>Assumption<select id="ps"><option value="0">Plane stress</option><option value="1">Plane strain</option></select></label>
+<label>Show<select id="fld"><option value="vm">von Mises</option><option value="s1">Max principal</option><option value="sx">σx</option><option value="sy">σy</option><option value="sxy">τxy</option></select></label>
+</div>
+<div class="tb"><span class="mu">Case studies</span><button id="c1">Comet window, sharp corner</button><button id="c2">Comet window, rounded fix</button></div>
+<canvas id="cv" width="800" height="520" role="img" aria-label="Stress contour of the selected problem"></canvas>
+<div class="leg" id="leg"></div>
+<div class="mu" style="display:flex;justify-content:space-between"><span id="lo"></span><span id="fl"></span><span id="hi"></span></div>
+<div class="row" id="ctl"></div>
+<div class="row"><div><label><span>Deformed shape</span><span id="dv"></span></label><input id="df" type="range" min="0" max="1" step="0.05" value="0.5"></div></div>
+<div class="m">
+<div><b id="pv"></b><span>Peak von Mises, MPa</span></div>
+<div><b id="sf"></b><span>Safety factor against yield</span></div>
+<div><b id="um"></b><span>Largest displacement, mm</span></div>
+</div>
+<p class="mu" id="pr">Click the plot to read the stress at any node.</p>
+<p class="mu" id="note"></p>
+</div>
+</section>
+
+<section>
+<h2>Mesh convergence</h2>
+<p>A result is only trustworthy once it stops changing as the mesh is refined. This re-solves the current problem on finer and finer meshes. The Sleipner A platform was lost in 1991 after a finite element model understated stresses, and a coarse mesh is the classic way that happens.</p>
+<div class="card"><button id="go">Run mesh study on the current problem</button><div id="p2" class="sc"></div><p id="msg"></p></div>
+</section>
+
+<section>
+<h2>Verification</h2>
+<p>Four problems with exact answers, solved by the same code as above. Each has a tolerance, and the table says whether the solver meets it.</p>
+<div class="card sc"><table id="tb"><tr><th>Test</th><th>Solver</th><th>Exact</th><th>Error</th><th>Result</th></tr></table></div>
+<p class="mu" style="margin-top:10px">The cantilever deflection is compared with Euler–Bernoulli theory, which ignores shear, so a few percent of difference is expected. The Kirsch plate is finite, so about 1 percent is expected.</p>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+<li>Linear elastic only. Yielding is flagged through the safety factor, not simulated.</li>
+<li>Fixed supports create an artificial stress singularity at the wall of the cantilever, so peak stress is read one beam depth away.</li>
+<li>Plane problems only, with a fixed set of parametric shapes. No free-form drawing.</li>
+<li>The Comet and Sleipner cases are simplified 2D lessons, not reconstructions of the real structures.</li>
+</ul>
+</section>
+</main>
+<script src="src/solver.js"></script>
+<script src="src/ui.js"></script>
+</body></html>

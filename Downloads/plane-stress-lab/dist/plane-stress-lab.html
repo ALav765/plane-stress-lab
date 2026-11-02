@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plane Stress Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+:root{--bg:#edf0f3;--cd:#fff;--tx:#101827;--mu:#5b6577;--ln:#cbd2dc;--ac:#0b5fff;--dg:#c2321f;--sf:#f6f8fa;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e131b;--cd:#161d28;--tx:#e8ecf2;--mu:#93a0b4;--ln:#2a3547;--ac:#6aa3ff;--dg:#ff7a66;--sf:#1b2431;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e131b;--cd:#161d28;--tx:#e8ecf2;--mu:#93a0b4;--ln:#2a3547;--ac:#6aa3ff;--dg:#ff7a66;--sf:#1b2431;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:880px;margin:0 auto;padding:28px 18px 56px}
+h1{font-size:30px;line-height:1.2;font-weight:500;margin:0 0 8px;letter-spacing:-.01em}
+h2{font-size:20px;font-weight:500;margin:0 0 6px}
+p{margin:0 0 12px;max-width:68ch}
+.mu{color:var(--mu);font-size:14px}
+section{border-top:1px solid var(--ln);padding:28px 0 8px;margin-top:28px}
+.card{background:var(--cd);border:1px solid var(--ln);border-radius:10px;padding:14px}
+canvas{width:100%;height:auto;display:block;border-radius:6px;background:var(--sf)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:14px 0}
+.m{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.m div{background:var(--sf);border-radius:8px;padding:10px 12px}
+.m b{display:block;font-size:24px;font-weight:500;font-variant-numeric:tabular-nums}
+.m span{font-size:13px;color:var(--mu)}
+label{display:flex;justify-content:space-between;font-size:14px;color:var(--mu);margin-top:6px}
+input[type=range]{width:100%;accent-color:var(--ac)}
+button{font:inherit;font-size:14px;background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+:root[data-theme="dark"] button{color:#0e131b}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--ln)}
+th{font-weight:500;color:var(--mu)}
+th:first-child,td:first-child{text-align:left}
+.leg{height:10px;border-radius:5px;margin-top:8px}
+.sc{overflow-x:auto}
+ul{padding-left:20px;margin:0 0 12px;max-width:68ch}
+li{margin-bottom:4px}
+.tb{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:12px}.tb label{display:block;margin:0}select{font:inherit;font-size:14px;display:block;margin-top:2px;background:var(--sf);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:7px 10px}button+button{margin-left:0}.tb button{background:var(--sf);color:var(--tx);border:1px solid var(--ln)}#go{margin-bottom:10px}</style></head><body><main>
+<h1>Plane Stress Lab</h1>
+<p>A finite element analyser for 2D solid mechanics, running entirely in your browser. Pick a problem, a material and a load. See the stress field, the deformed shape and the safety factor, then check the solver against exact solutions.</p>
+<p class="mu">Solver written from scratch: 4-node quadrilateral elements, plane stress or plane strain, linear elastic.</p>
+
+<section>
+<h2>Analyser</h2>
+<div class="card">
+<div class="tb">
+<label>Problem<select id="tpl"></select></label>
+<label>Material<select id="mat"></select></label>
+<label>Assumption<select id="ps"><option value="0">Plane stress</option><option value="1">Plane strain</option></select></label>
+<label>Show<select id="fld"><option value="vm">von Mises</option><option value="s1">Max principal</option><option value="sx">σx</option><option value="sy">σy</option><option value="sxy">τxy</option></select></label>
+</div>
+<div class="tb"><span class="mu">Case studies</span><button id="c1">Comet window, sharp corner</button><button id="c2">Comet window, rounded fix</button></div>
+<canvas id="cv" width="800" height="520" role="img" aria-label="Stress contour of the selected problem"></canvas>
+<div class="leg" id="leg"></div>
+<div class="mu" style="display:flex;justify-content:space-between"><span id="lo"></span><span id="fl"></span><span id="hi"></span></div>
+<div class="row" id="ctl"></div>
+<div class="row"><div><label><span>Deformed shape</span><span id="dv"></span></label><input id="df" type="range" min="0" max="1" step="0.05" value="0.5"></div></div>
+<div class="m">
+<div><b id="pv"></b><span>Peak von Mises, MPa</span></div>
+<div><b id="sf"></b><span>Safety factor against yield</span></div>
+<div><b id="um"></b><span>Largest displacement, mm</span></div>
+</div>
+<p class="mu" id="pr">Click the plot to read the stress at any node.</p>
+<p class="mu" id="note"></p>
+</div>
+</section>
+
+<section>
+<h2>Mesh convergence</h2>
+<p>A result is only trustworthy once it stops changing as the mesh is refined. This re-solves the current problem on finer and finer meshes. The Sleipner A platform was lost in 1991 after a finite element model understated stresses, and a coarse mesh is the classic way that happens.</p>
+<div class="card"><button id="go">Run mesh study on the current problem</button><div id="p2" class="sc"></div><p id="msg"></p></div>
+</section>
+
+<section>
+<h2>Verification</h2>
+<p>Four problems with exact answers, solved by the same code as above. Each has a tolerance, and the table says whether the solver meets it.</p>
+<div class="card sc"><table id="tb"><tr><th>Test</th><th>Solver</th><th>Exact</th><th>Error</th><th>Result</th></tr></table></div>
+<p class="mu" style="margin-top:10px">The cantilever deflection is compared with Euler–Bernoulli theory, which ignores shear, so a few percent of difference is expected. The Kirsch plate is finite, so about 1 percent is expected.</p>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+<li>Linear elastic only. Yielding is flagged through the safety factor, not simulated.</li>
+<li>Fixed supports create an artificial stress singularity at the wall of the cantilever, so peak stress is read one beam depth away.</li>
+<li>Plane problems only, with a fixed set of parametric shapes. No free-form drawing.</li>
+<li>The Comet and Sleipner cases are simplified 2D lessons, not reconstructions of the real structures.</li>
+</ul>
+</section>
+</main>
+<script>
+/* Plane Stress Lab: 2D linear-elastic finite element solver.
+   4-node quadrilaterals, plane stress or plane strain, matrix-free
+   Jacobi-preconditioned conjugate gradients. No dependencies. */
+function rrHit(c,s,a,b,rc){
+  if(s*a<=c*(b-rc))return a/c;
+  if(c*b<=s*(a-rc))return b/s;
+  const cx=a-rc,cy=b-rc,d=c*cx+s*cy;
+  return d+Math.sqrt(d*d-cx*cx-cy*cy+rc*rc);
+}
+function thetas(n,tc,K){
+  const T=new Array(n+1),h=n/2,S=300;
+  for(let seg=0;seg<2;seg++){
+    const lo=seg*Math.PI/4,hi=lo+Math.PI/4,cum=[0];
+    for(let k=1;k<=S;k++){const t=lo+(hi-lo)*(k-0.5)/S;cum.push(cum[k-1]+1+K*Math.exp(-(((t-tc)/0.15)**2)));}
+    for(let k=0;k<=h;k++){
+      const target=cum[S]*k/h;let q=1;
+      while(q<S&&cum[q]<target)q++;
+      const fr=(target-cum[q-1])/(cum[q]-cum[q-1]||1);
+      T[seg*h+k]=lo+(hi-lo)*(q-1+fr)/S;
+    }
+  }
+  T[0]=0;T[n]=Math.PI/2;T[n/2]=Math.PI/4;
+  return T;
+}
+function mesh(p){
+  const a=p.a,b=p.b,rc=p.rc,n=p.n,m=p.m,W=p.W,N=n+1,X=[],Y=[];
+  const K=Math.max(0,8*(1-rc/Math.min(a,b))),TH=thetas(n,Math.atan2(b,a),K);
+  for(let j=0;j<=m;j++){
+    const t=Math.pow(j/m,1.8);
+    for(let i=0;i<=n;i++){
+      const th=TH[i],c=Math.cos(th),s=Math.sin(th),r=rrHit(c,s,a,b,rc);
+      let xo,yo;
+      if(i<=n/2){xo=W;yo=W*s/c;}else{yo=W;xo=W*c/s;}
+      X.push((1-t)*r*c+t*xo);Y.push((1-t)*r*s+t*yo);
+    }
+  }
+  return {X:X,Y:Y};
+}
+function bm(x,y,r,s){
+  const dr=[-(1-s),(1-s),(1+s),-(1+s)],ds=[-(1-r),-(1+r),(1+r),(1-r)];
+  let j11=0,j12=0,j21=0,j22=0;
+  for(let k=0;k<4;k++){j11+=dr[k]*x[k]/4;j12+=dr[k]*y[k]/4;j21+=ds[k]*x[k]/4;j22+=ds[k]*y[k]/4;}
+  const det=j11*j22-j12*j21,B=new Float64Array(24);
+  for(let k=0;k<4;k++){
+    const nx=(j22*dr[k]-j12*ds[k])/(4*det),ny=(-j21*dr[k]+j11*ds[k])/(4*det);
+    B[2*k]=nx;B[8+2*k+1]=ny;B[16+2*k]=ny;B[16+2*k+1]=nx;
+  }
+  return {B:B,det:det};
+}
+function dB(D,B){
+  const R=new Float64Array(24);
+  for(let r=0;r<3;r++)for(let c=0;c<8;c++){let s=0;for(let k=0;k<3;k++)s+=D[r*3+k]*B[k*8+c];R[r*8+c]=s;}
+  return R;
+}
+function keF(x,y,D){
+  const K=new Float64Array(64),g=0.5773502691896258,P=[[-g,-g],[g,-g],[g,g],[-g,g]];
+  for(const q of P){
+    const o=bm(x,y,q[0],q[1]),DB=dB(D,o.B);
+    for(let a=0;a<8;a++)for(let b=0;b<8;b++){
+      let s=0;for(let c=0;c<3;c++)s+=o.B[c*8+a]*DB[c*8+b];K[a*8+b]+=s*o.det;
+    }
+  }
+  return K;
+}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;}
+const MATS={Steel:[200000,.3,250],Aluminium:[70000,.33,270],Titanium:[114000,.34,880],'ABS plastic':[2300,.35,40]};
+function win(p){
+  const n=p.n,m=p.m,N=n+1,ms=mesh(p),X=ms.X,Y=ms.Y,nd=2*X.length,els=[],F=new Float64Array(nd),fix=new Uint8Array(nd);
+  for(let j=0;j<m;j++)for(let i=0;i<n;i++)els.push([j*N+i,(j+1)*N+i,(j+1)*N+i+1,j*N+i+1]);
+  for(let j=0;j<=m;j++){fix[2*j*N+1]=1;fix[2*(j*N+n)]=1;}
+  for(let i=0;i<n;i++){
+    const a=m*N+i,b=a+1,L=Math.hypot(X[b]-X[a],Y[b]-Y[a]);
+    if(i<n/2){F[2*a]+=p.lam*p.q*L/2;F[2*b]+=p.lam*p.q*L/2;}else{F[2*a+1]+=p.q*L/2;F[2*b+1]+=p.q*L/2;}
+  }
+  return {X:X,Y:Y,els:els,F:F,fix:fix,pk:Array.from({length:N},(_,i)=>i),mir:1};
+}
+function beam(p){
+  const ny=p.ny,nx=2*Math.min(100,Math.round(ny*p.L/p.h/2)),N=nx+1,X=[],Y=[],els=[];
+  for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){X.push(p.L*i/nx);Y.push(p.h*(j/ny-.5));}
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)els.push([j*N+i,j*N+i+1,(j+1)*N+i+1,(j+1)*N+i]);
+  const nd=2*X.length,F=new Float64Array(nd),fix=new Uint8Array(nd);
+  for(let j=0;j<=ny;j++){fix[2*j*N]=1;fix[2*j*N+1]=1;F[2*(j*N+nx)+1]=-p.P*(j%ny?1:.5)/ny;}
+  const pk=[];for(let i=0;i<=nx;i++)if(X[i]>=p.h)pk.push(ny*N+i);
+  return {X:X,Y:Y,els:els,F:F,fix:fix,pk:pk,N:N,nx:nx,ny:ny};
+}
+function cyl(p){
+  const n=p.n,nr=n,N=n+1,X=[],Y=[],els=[];
+  for(let j=0;j<=nr;j++){const r=p.a+(p.b-p.a)*j/nr;for(let i=0;i<=n;i++){const t=Math.PI/2*i/n;X.push(r*Math.cos(t));Y.push(r*Math.sin(t));}}
+  for(let j=0;j<nr;j++)for(let i=0;i<n;i++)els.push([j*N+i,(j+1)*N+i,(j+1)*N+i+1,j*N+i+1]);
+  const nd=2*X.length,F=new Float64Array(nd),fix=new Uint8Array(nd);
+  for(let j=0;j<=nr;j++){fix[2*j*N+1]=1;fix[2*(j*N+n)]=1;}
+  for(let i=0;i<n;i++){const L=Math.hypot(X[i+1]-X[i],Y[i+1]-Y[i]);for(const k of [i,i+1]){F[2*k]+=p.q*L/2*X[k]/p.a;F[2*k+1]+=p.q*L/2*Y[k]/p.a;}}
+  return {X:X,Y:Y,els:els,F:F,fix:fix,pk:Array.from({length:N},(_,i)=>i),mir:1};
+}
+function fe(M,E,nu,ps){
+  const X=M.X,Y=M.Y,els=M.els,nn=X.length,nd=2*nn,fix=M.fix,F=Float64Array.from(M.F);
+  let D;
+  if(ps){const f=E/((1+nu)*(1-2*nu));D=[f*(1-nu),f*nu,0,f*nu,f*(1-nu),0,0,0,f*(1-2*nu)/2];}
+  else{const f=E/(1-nu*nu);D=[f,f*nu,0,f*nu,f,0,0,0,f*(1-nu)/2];}
+  const Ks=els.map(e=>keF(e.map(k=>X[k]),e.map(k=>Y[k]),D)),dg=new Float64Array(nd);
+  els.forEach((e,q)=>e.forEach((k,a)=>{dg[2*k]+=Ks[q][2*a*8+2*a];dg[2*k+1]+=Ks[q][(2*a+1)*8+2*a+1];}));
+  for(let d=0;d<nd;d++)if(fix[d])F[d]=0;
+  const u8=new Float64Array(8);
+  function mv(x,y){
+    y.fill(0);
+    for(let q=0;q<els.length;q++){
+      const e=els[q],K=Ks[q];
+      for(let a=0;a<4;a++){u8[2*a]=x[2*e[a]];u8[2*a+1]=x[2*e[a]+1];}
+      for(let r=0;r<8;r++){let s=0;for(let c=0;c<8;c++)s+=K[r*8+c]*u8[c];y[2*e[r>>1]+(r&1)]+=s;}
+    }
+    for(let d=0;d<nd;d++)if(fix[d])y[d]=0;
+  }
+  const x=new Float64Array(nd),r=Float64Array.from(F),z=new Float64Array(nd),pp=new Float64Array(nd),qv=new Float64Array(nd);
+  for(let d=0;d<nd;d++)z[d]=fix[d]?0:r[d]/dg[d];
+  pp.set(z);
+  let rz=dot(r,z),it=0;const r0=Math.sqrt(dot(r,r));
+  while(it<20000&&Math.sqrt(dot(r,r))>1e-9*r0){
+    mv(pp,qv);const al=rz/dot(pp,qv);
+    for(let d=0;d<nd;d++){x[d]+=al*pp[d];r[d]-=al*qv[d];z[d]=fix[d]?0:r[d]/dg[d];}
+    const rz2=dot(r,z),be=rz2/rz;rz=rz2;
+    for(let d=0;d<nd;d++)pp[d]=z[d]+be*pp[d];
+    it++;
+  }
+  const A=new Float64Array(nn),B=new Float64Array(nn),C=new Float64Array(nn),ct=new Float64Array(nn),CR=[[-1,-1],[1,-1],[1,1],[-1,1]];
+  els.forEach(e=>{
+    const ex=e.map(k=>X[k]),ey=e.map(k=>Y[k]),ue=new Float64Array(8);
+    for(let a=0;a<4;a++){ue[2*a]=x[2*e[a]];ue[2*a+1]=x[2*e[a]+1];}
+    for(let a=0;a<4;a++){
+      const Bm=bm(ex,ey,CR[a][0],CR[a][1]).B,ep=[0,0,0];
+      for(let k=0;k<3;k++)for(let c=0;c<8;c++)ep[k]+=Bm[k*8+c]*ue[c];
+      const k=e[a];
+      A[k]+=D[0]*ep[0]+D[1]*ep[1];B[k]+=D[3]*ep[0]+D[4]*ep[1];C[k]+=D[8]*ep[2];ct[k]++;
+    }
+  });
+  const vm=new Float64Array(nn),s1=new Float64Array(nn);
+  for(let k=0;k<nn;k++){
+    const a=A[k]/ct[k],b=B[k]/ct[k],c=C[k]/ct[k],sz=ps?nu*(a+b):0;
+    A[k]=a;B[k]=b;C[k]=c;
+    vm[k]=Math.sqrt(a*a+b*b+sz*sz-a*b-b*sz-sz*a+3*c*c);
+    s1[k]=(a+b)/2+Math.sqrt(((a-b)/2)**2+c*c);
+  }
+  return {x:x,sx:A,sy:B,sxy:C,vm:vm,s1:s1,it:it};
+}
+function peak(M,r){let v=0,ix=0;for(const k of M.pk)if(r.vm[k]>v){v=r.vm[k];ix=k;}return {v:v,k:ix};}
+const TESTS=[
+ ['Kirsch plate with a hole: stress concentration',()=>{const r=fe(win({a:1,b:1,rc:1,W:20,n:32,m:32,lam:0,q:1}),1000,.3,0);return [r.sy[0],3,.02];}],
+ ['Cantilever tip deflection vs. beam theory',()=>{const M=beam({L:100,h:10,P:1,ny:8}),r=fe(M,2e5,.3,0);return [-r.x[2*(M.ny/2*M.N+M.nx)+1],1e6/(3*2e5*1000/12),.06];}],
+ ['Cantilever mid-span bending stress',()=>{const M=beam({L:100,h:10,P:1,ny:8}),r=fe(M,2e5,.3,0);return [r.sx[M.ny*M.N+M.nx/2],3,.05];}],
+ ['Thick cylinder bore hoop stress (Lamé)',()=>{const r=fe(cyl({a:50,b:100,n:32,q:20}),2e5,.3,1);return [r.sy[0],20*12500/7500,.025];}]
+];
+
+if(typeof module!=='undefined')module.exports={mesh:mesh,win:win,beam:beam,cyl:cyl,fe:fe,peak:peak,TESTS:TESTS,MATS:MATS};
+
+</script>
+<script>
+const $=id=>document.getElementById(id);
+const STOPS=[[0,[38,70,150]],[.35,[40,160,170]],[.6,[240,215,90]],[.8,[240,130,50]],[1,[190,30,30]]];
+function cm(t){t=Math.max(0,Math.min(1,t));for(let i=1;i<STOPS.length;i++){const a=STOPS[i-1],b=STOPS[i];if(t<=b[0]){const f=(t-a[0])/(b[0]-a[0]);return 'rgb('+[0,1,2].map(k=>Math.round(a[1][k]+f*(b[1][k]-a[1][k]))).join(',')+')';}}return 'rgb(190,30,30)';}
+$('leg').style.background='linear-gradient(90deg,'+STOPS.map(s=>'rgb('+s[1].join(',')+') '+s[0]*100+'%').join(',')+')';
+function plot(id,xs,ys,o){
+  const W=400,H=220,L=46,R=14,T=14,B=40,fx=Math.log;
+  const x0=Math.min(...xs.map(fx)),x1=Math.max(...xs.map(fx)),ym=Math.max(...ys,o.ref||0)*1.12;
+  const X=v=>L+(fx(v)-x0)/(x1-x0||1)*(W-L-R),Y=v=>H-B-v/ym*(H-B-T);
+  let s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:560px" role="img" aria-label="Peak stress against number of elements">';
+  for(let k=0;k<=4;k++){const v=ym*k/4;s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--ln)"/><text x="'+(L-6)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="var(--mu)">'+v.toFixed(0)+'</text>';}
+  xs.forEach(v=>{s+='<text x="'+X(v)+'" y="'+(H-B+16)+'" text-anchor="middle" font-size="11" fill="var(--mu)">'+v+'</text>';});
+  s+='<text x="'+((L+W-R)/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="var(--mu)">number of elements</text><text x="12" y="'+(T+4)+'" font-size="11" fill="var(--mu)">peak von Mises, MPa</text>';
+  s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(o.ref)+'" y2="'+Y(o.ref)+'" stroke="var(--dg)" stroke-dasharray="5 4"/><text x="'+(W-R)+'" y="'+(Y(o.ref)-5)+'" text-anchor="end" font-size="11" fill="var(--dg)">finest mesh</text>';
+  s+='<polyline fill="none" stroke="var(--ac)" stroke-width="2" points="'+xs.map((v,i)=>X(v)+','+Y(ys[i])).join(' ')+'"/>';
+  xs.forEach((v,i)=>{s+='<circle cx="'+X(v)+'" cy="'+Y(ys[i])+'" r="3" fill="var(--ac)"/>';});
+  $(id).innerHTML=s+'</svg>';
+}
+const TPL={
+ win:{name:'Plate with a window',ps:0,ns:[4,8,16,32,48],n:32,par:[['rc','Corner radius (window half-width = 1)',.06,1,.01,.06],['q','Hoop stress, MPa',10,150,1,53]],build:(v,n)=>win({a:1,b:1.2,rc:v.rc,W:24,n:n,m:n,lam:.5,q:v.q}),note:'Quarter model, biaxial tension with axial stress at half the hoop stress, as in a pressurised fuselage.'},
+ beam:{name:'Cantilever beam',ps:0,ns:[2,4,8,16],n:8,par:[['L','Length, mm',50,200,5,100],['h','Depth, mm',5,30,1,10],['q','Tip load, N per mm of width',.5,20,.5,5]],build:(v,n)=>beam({L:v.L,h:v.h,P:v.q,ny:n}),note:'Fixed at the left, loaded at the right tip. Peak stress is read on the top surface at least one depth from the wall.'},
+ cyl:{name:'Pressurised thick cylinder',ps:1,ns:[4,8,16,32],n:32,par:[['r','Outer ÷ inner radius',1.2,4,.1,2],['q','Internal pressure, MPa',1,100,1,20]],build:(v,n)=>cyl({a:50,b:50*v.r,n:n,q:v.q}),note:'Quarter of a ring, 50 mm bore, plane strain.'}
+};
+const S={t:'win',m:'Aluminium',ps:0,f:'vm',d:.5,v:{}};
+function setT(t,v){
+  S.t=t;S.ps=TPL[t].ps;S.v={};TPL[t].par.forEach(p=>S.v[p[0]]=p[5]);Object.assign(S.v,v||{});
+  $('tpl').value=t;$('ps').value=S.ps;$('mat').value=S.m;
+  $('ctl').innerHTML=TPL[t].par.map(p=>'<div><label><span>'+p[1]+'</span><span id="o_'+p[0]+'"></span></label><input type="range" id="s_'+p[0]+'" min="'+p[2]+'" max="'+p[3]+'" step="'+p[4]+'" value="'+S.v[p[0]]+'"></div>').join('');
+  TPL[t].par.forEach(p=>$('s_'+p[0]).addEventListener('input',e=>{S.v[p[0]]=+e.target.value;run();}));
+  $('note').textContent=TPL[t].note;run();
+}
+function run(){
+  const T=TPL[S.t],mt=MATS[S.m];
+  S.M=T.build(S.v,T.n);S.r=fe(S.M,mt[0],mt[1],S.ps);
+  T.par.forEach(p=>$('o_'+p[0]).textContent=S.v[p[0]]);
+  const pk=peak(S.M,S.r);
+  $('pv').textContent=pk.v.toFixed(1);
+  const sf=mt[2]/pk.v;$('sf').textContent=sf.toFixed(2);$('sf').style.color=sf<1?'var(--dg)':'';
+  S.k=pk.k;draw();
+}
+function draw(){
+  const M=S.M,r=S.r,V=r[S.f],g=$('cv').getContext('2d'),nn=M.X.length;
+  let um=0;for(let k=0;k<nn;k++)um=Math.max(um,Math.hypot(r.x[2*k],r.x[2*k+1]));
+  $('um').textContent=um<.01?um.toExponential(1):um.toFixed(3);
+  const MX=M.mir?[[1,1],[-1,1],[1,-1],[-1,-1]]:[[1,1]],xr=Math.max(...M.X)-Math.min(...M.X);
+  const k=um?S.d*.12*(S.t=='win'?4:xr)/um:0;
+  $('dv').textContent=S.d?'×'+Math.round(k)+' scale':'off';
+  const dx=new Float64Array(nn),dy=new Float64Array(nn);
+  for(let i=0;i<nn;i++){dx[i]=M.X[i]+k*r.x[2*i];dy[i]=M.Y[i]+k*r.x[2*i+1];}
+  let x0=-3.6,x1=3.6,y0=-2.4,y1=2.4;
+  if(S.t!='win'){x0=y0=1e9;x1=y1=-1e9;for(let i=0;i<nn;i++)for(const m of MX){x0=Math.min(x0,m[0]*dx[i]);x1=Math.max(x1,m[0]*dx[i]);y0=Math.min(y0,m[1]*dy[i]);y1=Math.max(y1,m[1]*dy[i]);}}
+  const sc=Math.min(760/(x1-x0),480/(y1-y0)),cx=(x0+x1)/2,cy=(y0+y1)/2;
+  S.vw={sc:sc,cx:cx,cy:cy,dx:dx,dy:dy,MX:MX};
+  const so=Array.from(V).sort((a,b)=>a-b),lo=so[Math.floor(.002*nn)],hi=so[Math.floor(.998*nn)],tx=(x,m)=>400+(m*x-cx)*sc,ty=(y,m)=>260-(m*y-cy)*sc;
+  $('lo').textContent=lo.toFixed(0);$('hi').textContent=hi.toFixed(0)+' MPa';$('fl').textContent=$('fld').selectedOptions[0].text;
+  g.clearRect(0,0,800,520);g.lineWidth=.6;
+  for(const e of M.els){
+    let v=0,out=true;for(const i of e){v+=V[i];if(tx(dx[i],1)>-20&&tx(dx[i],1)<820&&ty(dy[i],1)>-20&&ty(dy[i],1)<540)out=false;}
+    if(out&&S.t=='win')continue;
+    g.fillStyle=g.strokeStyle=cm((v/4-lo)/(hi-lo||1));
+    for(const m of MX){g.beginPath();e.forEach((i,j)=>{const x=tx(dx[i],m[0]),y=ty(dy[i],m[1]);j?g.lineTo(x,y):g.moveTo(x,y);});g.closePath();g.fill();g.stroke();}
+  }
+  g.strokeStyle='#fff';g.lineWidth=2;
+  for(const m of MX){g.beginPath();g.arc(tx(dx[S.k],m[0]),ty(dy[S.k],m[1]),8,0,6.2832);g.stroke();}
+}
+$('cv').addEventListener('click',ev=>{
+  const c=$('cv'),b=c.getBoundingClientRect(),px=(ev.clientX-b.left)*800/b.width,py=(ev.clientY-b.top)*520/b.height,w=S.vw;let bd=1e9,bk=0;
+  for(let i=0;i<S.M.X.length;i++)for(const m of w.MX){const d=Math.hypot(400+(m[0]*w.dx[i]-w.cx)*w.sc-px,260-(m[1]*w.dy[i]-w.cy)*w.sc-py);if(d<bd){bd=d;bk=i;}}
+  const r=S.r;$('pr').textContent='Node at ('+S.M.X[bk].toFixed(2)+', '+S.M.Y[bk].toFixed(2)+'): von Mises '+r.vm[bk].toFixed(1)+', max principal '+r.s1[bk].toFixed(1)+', σx '+r.sx[bk].toFixed(1)+', σy '+r.sy[bk].toFixed(1)+', τxy '+r.sxy[bk].toFixed(1)+' MPa.';
+});
+$('tpl').innerHTML=Object.keys(TPL).map(k=>'<option value="'+k+'">'+TPL[k].name+'</option>').join('');
+$('mat').innerHTML=Object.keys(MATS).map(k=>'<option>'+k+'</option>').join('');
+$('tpl').onchange=e=>setT(e.target.value);
+$('mat').onchange=e=>{S.m=e.target.value;run();};
+$('ps').onchange=e=>{S.ps=+e.target.value;run();};
+$('fld').onchange=e=>{S.f=e.target.value;draw();};
+$('df').oninput=e=>{S.d=+e.target.value;draw();};
+$('c1').onclick=()=>{S.m='Aluminium';setT('win',{rc:.06,q:53});};
+$('c2').onclick=()=>{S.m='Aluminium';setT('win',{rc:.6,q:53});};
+$('go').onclick=()=>{
+  const T=TPL[S.t],mt=MATS[S.m],xs=[],ys=[];$('go').textContent='Running…';
+  const step=i=>{
+    if(i<T.ns.length){const M=T.build(S.v,T.ns[i]);xs.push(M.els.length);ys.push(peak(M,fe(M,mt[0],mt[1],S.ps)).v);setTimeout(()=>step(i+1),10);return;}
+    const fin=ys[ys.length-1];plot('p2',xs,ys,{ref:fin});
+    $('msg').textContent='The coarsest mesh ('+xs[0]+' elements) reports '+ys[0].toFixed(1)+' MPa, '+Math.round(Math.abs(1-ys[0]/fin)*100)+'% '+(ys[0]<fin?'below':'above')+' the finest-mesh value of '+fin.toFixed(1)+' MPa. Only trust a result once the curve has flattened.';
+    $('go').textContent='Run again';
+  };
+  step(0);
+};
+setT('win');
+setTimeout(()=>TESTS.forEach((t,i)=>setTimeout(()=>{
+  const q=t[1](),e=q[0]/q[1]-1,ok=Math.abs(e)<q[2];
+  $('tb').insertAdjacentHTML('beforeend','<tr><td>'+t[0]+'</td><td>'+q[0].toPrecision(4)+'</td><td>'+q[1].toPrecision(4)+'</td><td>'+(e*100).toFixed(1)+'%</td><td style="color:'+(ok?'var(--ac)':'var(--dg)')+'">'+(ok?'Pass':'Fail')+' (±'+q[2]*100+'%)</td></tr>');
+},40*i)),50);
+
+</script>
+</body></html>
